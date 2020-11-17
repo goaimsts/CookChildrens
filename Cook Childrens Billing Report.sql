@@ -26,8 +26,8 @@ declare @end		date	= dateadd(month,1,@start)
 
 
 select 
-	  facility.[NAME]										as [Facility]
-	 ,cc.[NAME]												as [Cost Center]
+	 facility.[NAME]										as [Facility]
+	 ,cc.[code] + ' ' + cc.[NAME]							as [Cost Center]
 	,count(distinct wko.WO_NUMBER)							as woCount
 	,isnull(sum(	
 			case when isnull(wct.RATE_MULTI,1.0) <= 1.0
@@ -82,10 +82,57 @@ where
 	--										+ convert(char(4),datepart(yyyy,getdate()))
 	--									)
 group by 
-	  facility.[NAME]								
+	  facility.[NAME]	
+	 ,cc.[code]							
 	 ,cc.[NAME]	 
 	 ,wko.WO_TYPE 
-order by cc.[NAME]
+order by cc.[code] + ' ' + cc.[NAME]
+
+
+
+select 
+	 count(distinct wko.WO_NUMBER)							as woCount
+	,isnull(sum(	
+			case when isnull(wct.RATE_MULTI,1.0) <= 1.0
+				then wct.[HOURS]
+				else 0
+			 end ),0)										as [Hours-Reg]
+	,isnull(sum(	case when isnull(wct.RATE_MULTI,1.0) > 1.0
+				then wct.[HOURS]
+				else 0
+			 end ),0)										as [Hours-OT]
+	,sum(isnull(
+			case 
+				when COSTING_TYPE = 'H' 
+				then [hours] * CHG_RATE * RATE_MULTI
+				else CHG_RATE
+			 end,0)										)	as [Labor $]
+	,sum(isnull((wcm.PART_QTY * wcm.PART_COST),0))			as [Material $]
+	,case when wko.WO_TYPE = 'PM' 
+		then 'PM' 
+		else 'CM' 
+	 end													as [WO Type]
+	,'Report period: '
+		+ convert(varchar(2),datepart(month,(dateadd(month,-1,getdate()))))
+			+ '/1/'
+			+ convert(char(4),datepart(yyyy,(dateadd(month,-1,getdate()))))
+			+ ' and '
+			+ convert(varchar(2),datepart(month,(getdate())))
+			+ '/1/'
+			+ convert(char(4),datepart(yyyy,getdate()))		as [ReportPeriod]
+from aims.wko 
+	left join aims.wct on wko.FACILITY = wct.FACILITY and wko.WO_NUMBER = wct.WO_NUMBER
+		left join aims.emp on wct.EMPLOYEE = emp.EMPLOYEE
+	left join aims.WCM on wko.FACILITY = wcm.FACILITY and wko.WO_NUMBER = wcm.WO_NUMBER
+	left join aims.cod as facility on wko.FACILITY = facility.[CODE] and facility.[TYPE] = 'y'
+	left join aims.cod as cc on wko.CHG_CTR = cc.[CODE] and wko.FACILITY = cc.FACILITY and cc.[TYPE] = 'a'
+where  
+	wko.CHG_CTR in (select costCenterCode from @costCenters)
+	and 
+	wko.WO_STATUS in ('CL','PS')
+	and 
+	convert(date,wko.STAT_DATETIME) between '1/1/2020' and '2/1/2020'
+group by wko.WO_TYPE
 
 
 
@@ -97,7 +144,7 @@ order by cc.[NAME]
 --Detail
 select 
 	  facility.[NAME]										as [Facility]
-	 ,cc.[NAME]												as [Cost Center]
+	 ,cc.[code] + ' ' + cc.[NAME]							as [Cost Center]
 	,count(distinct wko.WO_NUMBER)							as woCount
 	,isnull(sum(	
 			case when isnull(wct.RATE_MULTI,1.0) <= 1.0
@@ -140,10 +187,11 @@ where
 	and 
 	convert(date,wko.STAT_DATETIME) between '1/1/2020' and '2/1/2020'
 group by 
-	  facility.[NAME]								
+	  facility.[NAME]	
+	 ,cc.[code]							
 	 ,cc.[NAME]	 
 	 ,wko.WO_TYPE 
-order by cc.[NAME]
+order by cc.[code] + ' ' + cc.[NAME]
 
 --Summary
 select 
@@ -188,18 +236,20 @@ where
 	wko.WO_STATUS in ('CL','PS')
 	and 
 	convert(date,wko.STAT_DATETIME) between '1/1/2020' and '2/1/2020'
-group by 
-	  facility.[NAME]								
-	 ,cc.[NAME]	 
-	 ,wko.WO_TYPE 
-order by cc.[NAME]
+group by wko.WO_TYPE
+
+
+
+
+
+
 
 
 --FOR PRODUCTION
 --Detail
 select 
-	  facility.[NAME]										as [Facility]
-	 ,cc.[NAME]												as [Cost Center]
+	 facility.[NAME]										as [Facility]
+	,cc.[code] + ' ' + cc.[NAME]							as [Cost Center]
 	,count(distinct wko.WO_NUMBER)							as woCount
 	,isnull(sum(	
 			case when isnull(wct.RATE_MULTI,1.0) <= 1.0
@@ -253,10 +303,11 @@ where
 											+ convert(char(4),datepart(yyyy,getdate()))
 										)
 group by 
-	  facility.[NAME]								
+	  facility.[NAME]	
+	 ,cc.[code]							
 	 ,cc.[NAME]	 
 	 ,wko.WO_TYPE 
-order by cc.[NAME]
+order by cc.[code] + ' ' + cc.[NAME]
 
 --Summary
 select 
@@ -312,11 +363,7 @@ where
 											+ '/1/'
 											+ convert(char(4),datepart(yyyy,getdate()))
 										)
-group by 
-	  facility.[NAME]								
-	 ,cc.[NAME]	 
-	 ,wko.WO_TYPE 
-order by cc.[NAME]
+group by wko.WO_TYPE
 
 */
 
